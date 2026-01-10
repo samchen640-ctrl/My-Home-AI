@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOME-AI 助手 | 進階版</title>
+    <!-- CSS & Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- JS Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        
+        .markdown-body pre {
+            background-color: #0d1117;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+            overflow-x: auto;
+            position: relative;
+        }
+        .markdown-body code { font-family: 'Fira Code', monospace; font-size: 0.875rem; }
+        .markdown-body p { margin-bottom: 0.75rem; }
+        .markdown-body ul, .markdown-body ol { margin-left: 1.5rem; margin-bottom: 0.75rem; }
+        .markdown-body li { list-style-type: disc; }
+        
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            font-size: 0.75rem;
+            background: #30363d;
+            color: #c9d1d9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #30363d;
+        }
+        .copy-btn:hover { background: #444c56; }
+        
+        .chat-bubble { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 h-screen flex flex-col md:flex-row overflow-hidden">
+
+    <!-- 側邊設定面板 -->
+    <aside class="w-full md:w-80 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0 z-20">
+        <div class="p-6 overflow-y-auto">
+            <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent flex items-center mb-6">
+                <span class="mr-2 text-2xl">🤖</span> HOME-AI 助手
+            </h1>
+
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">手動 API 設定</label>
+                    <div class="space-y-3">
+                        <div>
+                            <input type="text" id="baseUrl" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="API 網址 (例如: http://localhost:1234/v1)" value="">
+                        </div>
+                        <div>
+                            <input type="password" id="apiKey" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="API 金鑰 (若無則留空)" value="">
+                        </div>
+                        <div>
+                            <div class="relative group">
+                                <input type="text" id="modelId" list="modelList" class="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="模型 ID (連線成功後自動載入)" value="">
+                                <datalist id="modelList"></datalist>
+                                <p class="text-[10px] text-gray-500 mt-1 px-1">連線成功後可點擊框框選擇模型</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider">溫度 (Temperature)</label>
+                        <span id="tempValue" class="text-blue-400 text-xs font-mono">0.7</span>
+                    </div>
+                    <input type="range" id="tempSlider" min="0" max="1.5" step="0.1" value="0.7" class="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                </div>
+
+                <div class="pt-4 space-y-2">
+                    <button onclick="saveAndTest()" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold py-2.5 rounded-lg transition-all shadow-lg shadow-blue-900/20">
+                        更新設定並測試連線
+                    </button>
+                    <button onclick="clearChat()" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm py-2 rounded-lg transition-all">
+                        清除對話內容
+                    </button>
+                    <button onclick="resetSettings()" class="w-full border border-gray-800 hover:border-red-900/50 hover:bg-red-900/10 text-gray-500 hover:text-red-400 text-[10px] py-1 rounded transition-all">
+                        重設所有 API 設定
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-auto p-4 border-t border-gray-800 bg-gray-900/50">
+            <div id="fileStatusArea" class="hidden">
+                <div class="flex items-center justify-between p-2 bg-blue-900/20 border border-blue-800/30 rounded-lg">
+                    <div class="flex items-center overflow-hidden">
+                        <span class="text-blue-400 mr-2">📄</span>
+                        <span id="fileName" class="text-xs text-blue-300 truncate font-medium">文件已載入</span>
+                    </div>
+                    <button onclick="removeFile()" class="text-gray-500 hover:text-red-400 px-1 text-lg">×</button>
+                </div>
+            </div>
+            <p class="text-[10px] text-gray-600 mt-2 text-center leading-relaxed">
+                連線成功後，系統將自動緩存設定於此瀏覽器。
+            </p>
+        </div>
+    </aside>
+
+    <!-- 主聊天區 -->
+    <main class="flex-1 flex flex-col relative bg-gray-950">
+        <!-- 頂部資訊 -->
+        <header class="h-14 border-b border-gray-800 flex items-center px-6 justify-between bg-gray-950/50 backdrop-blur-md">
+            <div class="flex items-center space-x-2">
+                <div id="connStatus" class="w-2 h-2 rounded-full bg-gray-600"></div>
+                <span id="connLabel" class="text-xs text-gray-400">尚未連線 (請手動設定)</span>
+            </div>
+            <div id="loader" class="hidden animate-pulse flex items-center space-x-2">
+                <div class="flex space-x-1">
+                    <div class="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></div>
+                    <div class="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                    <div class="w-1 h-1 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                </div>
+                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Generating</span>
+            </div>
+        </header>
+
+        <!-- 訊息展示區 -->
+        <div id="chatDisplay" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 scroll-smooth">
+            <!-- 預設歡迎詞 -->
+            <div class="flex items-start chat-bubble">
+                <div class="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-4 shadow-lg shadow-blue-900/40">
+                    <span class="text-xs font-bold">AI</span>
+                </div>
+                <div class="bg-gray-900 border border-gray-800 rounded-2xl rounded-tl-none p-4 max-w-[90%] md:max-w-2xl shadow-xl">
+                    <p class="text-sm leading-relaxed text-gray-300">
+                        歡迎使用 HOME-AI！請在左側面板手動輸入你的 **API 網址**。連線成功後，我會自動載入遠端模型清單。
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 輸入控制區 -->
+        <div class="p-4 md:p-6 bg-gradient-to-t from-gray-950 via-gray-950 to-transparent">
+            <div class="max-w-4xl mx-auto">
+                <div class="relative bg-gray-900 border border-gray-800 rounded-2xl p-2 shadow-2xl focus-within:border-blue-600/50 transition-all">
+                    <div class="flex items-end gap-2">
+                        <input type="file" id="fileInput" class="hidden" onchange="handleFileUpload()">
+                        <button onclick="document.getElementById('fileInput').click()" class="flex-shrink-0 hover:bg-gray-800 text-gray-400 p-3 rounded-xl transition-colors group" title="上傳文件">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                        </button>
+
+                        <div class="flex-1">
+                            <textarea id="userInput" rows="1" class="w-full bg-transparent border-none rounded-lg p-3 text-sm text-white focus:ring-0 outline-none resize-none overflow-hidden max-h-48" placeholder="輸入訊息... (Shift+Enter 換行)" oninput="autoGrow(this)" onkeydown="checkEnter(event)"></textarea>
+                        </div>
+
+                        <button id="sendBtn" onclick="sendMessage()" class="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition-all shadow-lg shadow-blue-900/40 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        let isGenerating = false;
+        let abortController = null;
+        let attachedFileContent = "";
+        
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return hljs.highlightAuto(code).value;
+            },
+            breaks: true
+        });
+
+        window.onload = () => {
+            const savedBaseUrl = localStorage.getItem('ai_base_url');
+            const savedApiKey = localStorage.getItem('ai_api_key');
+            const savedModelId = localStorage.getItem('ai_model_id');
+            const savedTemp = localStorage.getItem('ai_temp');
+
+            if (savedBaseUrl) document.getElementById('baseUrl').value = savedBaseUrl;
+            if (savedApiKey) document.getElementById('apiKey').value = savedApiKey;
+            if (savedModelId) document.getElementById('modelId').value = savedModelId;
+            if (savedTemp) {
+                document.getElementById('tempSlider').value = savedTemp;
+                document.getElementById('tempValue').textContent = savedTemp;
+            }
+            if (savedBaseUrl) testConnection(false);
+        };
+
+        const tempSlider = document.getElementById('tempSlider');
+        tempSlider.addEventListener('input', () => {
+            document.getElementById('tempValue').textContent = tempSlider.value;
+            localStorage.setItem('ai_temp', tempSlider.value);
+        });
+
+        function autoGrow(el) {
+            el.style.height = "auto";
+            el.style.height = (el.scrollHeight) + "px";
+        }
+
+        function checkEnter(e) {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function appendMessage(role, text) {
+            const display = document.getElementById('chatDisplay');
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex items-start chat-bubble ${role === 'user' ? 'justify-end' : ''}`;
+
+            const icon = document.createElement('div');
+            if (role === 'user') {
+                icon.className = 'hidden';
+            } else {
+                icon.className = 'flex-shrink-0 w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center mr-4 shadow-lg shadow-blue-900/40';
+                icon.innerHTML = '<span class="text-xs font-bold">AI</span>';
+            }
+
+            const bubble = document.createElement('div');
+            bubble.className = role === 'user' 
+                ? 'bg-blue-700 text-white rounded-2xl rounded-tr-none p-4 max-w-[85%] shadow-xl shadow-blue-900/10'
+                : 'bg-gray-900 border border-gray-800 text-gray-200 rounded-2xl rounded-tl-none p-4 max-w-[85%] md:max-w-3xl shadow-xl markdown-body';
+
+            const content = document.createElement('div');
+            content.className = 'text-sm leading-relaxed';
+            
+            if (role === 'user') {
+                content.textContent = text;
+            } else {
+                content.innerHTML = marked.parse(text || '...');
+            }
+
+            bubble.appendChild(content);
+            if (role !== 'user') wrapper.appendChild(icon);
+            wrapper.appendChild(bubble);
+            display.appendChild(wrapper);
+            display.scrollTop = display.scrollHeight;
+
+            return content;
+        }
+
+        async function handleFileUpload() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return;
+
+            const statusArea = document.getElementById('fileStatusArea');
+            const nameLabel = document.getElementById('fileName');
+            
+            statusArea.classList.remove('hidden');
+            nameLabel.textContent = `解析中...`;
+
+            try {
+                let text = "";
+                if (file.type === "application/pdf") {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const content = await page.getTextContent();
+                        text += content.items.map(s => s.str).join(' ') + "\n";
+                    }
+                } else {
+                    text = await file.text();
+                }
+                attachedFileContent = text;
+                nameLabel.textContent = `${file.name} (${text.length} 字)`;
+            } catch (err) {
+                alert("讀取檔案失敗: " + err.message);
+                removeFile();
+            }
+        }
+
+        function removeFile() {
+            attachedFileContent = "";
+            document.getElementById('fileInput').value = "";
+            document.getElementById('fileStatusArea').classList.add('hidden');
+        }
+
+        async function saveAndTest() {
+            const b = document.getElementById('baseUrl').value.trim();
+            const k = document.getElementById('apiKey').value.trim();
+            const m = document.getElementById('modelId').value.trim();
+
+            if (!b) {
+                alert("請至少輸入 API 網址。");
+                return;
+            }
+
+            localStorage.setItem('ai_base_url', b);
+            localStorage.setItem('ai_api_key', k);
+            localStorage.setItem('ai_model_id', m);
+
+            testConnection(true);
+        }
+
+        async function resetSettings() {
+            if (confirm("確定要重設所有 API 設定嗎？")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        async function testConnection(showSuccess) {
+            const b = document.getElementById('baseUrl').value.trim();
+            const k = document.getElementById('apiKey').value.trim();
+            const mInput = document.getElementById('modelId');
+            const mList = document.getElementById('modelList');
+            const dot = document.getElementById('connStatus');
+            const label = document.getElementById('connLabel');
+
+            if (!b) return;
+
+            dot.className = 'w-2 h-2 rounded-full bg-yellow-500 animate-ping';
+            label.textContent = '抓取模型清單中...';
+
+            const headers = { "ngrok-skip-browser-warning": "true" };
+            if (k) headers["Authorization"] = `Bearer ${k}`;
+
+            try {
+                const res = await fetch(`${b}/models`, { headers });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    const models = data.data || [];
+                    
+                    mList.innerHTML = '';
+                    models.forEach(model => {
+                        const opt = document.createElement('option');
+                        opt.value = model.id;
+                        mList.appendChild(opt);
+                    });
+
+                    // 自動填入邏輯：如果目前是空的，或目前填的模型不在抓到的清單內，則填入第一個
+                    const currentModel = mInput.value.trim();
+                    const modelExists = models.some(m => m.id === currentModel);
+
+                    if (models.length > 0 && (!currentModel || !modelExists)) {
+                        mInput.value = models[0].id;
+                        localStorage.setItem('ai_model_id', models[0].id);
+                    }
+
+                    dot.className = 'w-2 h-2 rounded-full bg-green-500';
+                    label.textContent = `連線成功 (${models.length} 模型)`;
+                    if (showSuccess) alert(`連線成功！已自動抓取並建議模型: ${mInput.value}`);
+                } else throw "HTTP " + res.status;
+            } catch (e) {
+                dot.className = 'w-2 h-2 rounded-full bg-red-500';
+                label.textContent = '連線失敗 (請檢查網址)';
+                if (showSuccess) alert(`連線失敗！\n原因: ${e}\n請確認網址是否包含 /v1 且服務已啟動。`);
+            }
+        }
+
+        async function sendMessage() {
+            if (isGenerating) {
+                if (abortController) abortController.abort();
+                return;
+            }
+
+            const input = document.getElementById('userInput');
+            const text = input.value.trim();
+            if (!text && !attachedFileContent) return;
+
+            const b = document.getElementById('baseUrl').value.trim();
+            const m = document.getElementById('modelId').value.trim();
+
+            if (!b || !m) {
+                alert("請先完成左側的連線設定並測試連線以選擇模型。");
+                return;
+            }
+
+            const sendBtn = document.getElementById('sendBtn');
+            const loader = document.getElementById('loader');
+            
+            isGenerating = true;
+            sendBtn.innerHTML = '<svg class="h-6 w-6 animate-spin" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+            loader.classList.remove('hidden');
+
+            appendMessage('user', text);
+            const aiContainer = appendMessage('ai', '');
+            let fullText = "";
+            
+            input.value = "";
+            input.style.height = "auto";
+            abortController = new AbortController();
+
+            const k = document.getElementById('apiKey').value.trim();
+            const t = parseFloat(document.getElementById('tempSlider').value);
+
+            let prompt = text;
+            if (attachedFileContent) {
+                prompt = `[參考文件內容]\n${attachedFileContent}\n\n[提問]\n${text}`;
+            }
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
+            };
+            if (k) headers['Authorization'] = `Bearer ${k}`;
+
+            try {
+                const response = await fetch(`${b}/chat/completions`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        model: m,
+                        messages: [{ role: "user", content: prompt }],
+                        temperature: t,
+                        stream: true
+                    }),
+                    signal: abortController.signal
+                });
+
+                if (!response.ok) throw new Error("HTTP " + response.status);
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        const str = line.replace(/^data: /, "").trim();
+                        if (!str || str === "[DONE]") continue;
+                        
+                        try {
+                            const json = JSON.parse(str);
+                            const content = json.choices[0].delta.content || "";
+                            fullText += content;
+                            aiContainer.innerHTML = marked.parse(fullText);
+                            
+                            aiContainer.querySelectorAll('pre code').forEach((block) => {
+                                hljs.highlightElement(block);
+                                if (!block.parentElement.querySelector('.copy-btn')) {
+                                    const btn = document.createElement('button');
+                                    btn.className = 'copy-btn';
+                                    btn.textContent = 'Copy';
+                                    btn.onclick = () => copyCode(block.innerText, btn);
+                                    block.parentElement.appendChild(btn);
+                                }
+                            });
+                            document.getElementById('chatDisplay').scrollTop = document.getElementById('chatDisplay').scrollHeight;
+                        } catch (e) {}
+                    }
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    aiContainer.innerHTML += '<p class="text-orange-500 italic mt-2 text-[10px]">已中止產生。</p>';
+                } else {
+                    aiContainer.innerHTML = `<p class="text-red-500 font-bold">[連線錯誤] ${err.message}</p><p class="text-xs text-gray-500 mt-1">請確認 API 網址是否正確並支援 Streaming。</p>`;
+                }
+            } finally {
+                isGenerating = false;
+                sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>';
+                loader.classList.add('hidden');
+            }
+        }
+
+        function copyCode(text, btn) {
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = 'Copy', 2000);
+            });
+        }
+
+        function clearChat() {
+            document.getElementById('chatDisplay').innerHTML = '';
+            appendMessage('ai', '對話已清除。你可以輸入新的問題。');
+        }
+    </script>
+</body>
+</html>
